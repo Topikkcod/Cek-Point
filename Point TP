@@ -1,0 +1,702 @@
+--============================================================
+-- CHECKPOINT SYSTEM v5.1
+-- 3 Slots + Toggle Switch UI + HD Ghost Aura + Menu Kanan
+--============================================================
+
+local Players          = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+
+if getgenv().CheckpointSystem and getgenv().CheckpointSystem.Destroy then
+    pcall(getgenv().CheckpointSystem.Destroy)
+end
+
+local container
+if gethui then
+    container = gethui()
+elseif syn and syn.protect_gui then
+    local sg = Instance.new("ScreenGui")
+    syn.protect_gui(sg)
+    container = game:GetService("CoreGui")
+    sg:Destroy()
+else
+    container = game:GetService("CoreGui")
+end
+
+-- 3 Slot Checkpoint
+local Checkpoints = {
+    [1] = { cframe = nil, ghost = nil },
+    [2] = { cframe = nil, ghost = nil },
+    [3] = { cframe = nil, ghost = nil },
+}
+
+-- Theme Colors
+local COLOR_BG        = Color3.fromRGB(12, 16, 26)
+local COLOR_PANEL     = Color3.fromRGB(20, 26, 42)
+local COLOR_TITLEBAR  = Color3.fromRGB(24, 32, 54)
+local COLOR_BTN       = Color3.fromRGB(28, 38, 60)
+local COLOR_BTN_HOVER = Color3.fromRGB(42, 60, 95)
+local COLOR_ACCENT    = Color3.fromRGB(80, 170, 255)
+local COLOR_ACCENT_D  = Color3.fromRGB(30, 90, 180)
+local COLOR_TEXT      = Color3.fromRGB(220, 232, 255)
+local COLOR_TEXT_DIM  = Color3.fromRGB(120, 140, 180)
+local COLOR_SAVED     = Color3.fromRGB(50, 220, 130)
+local COLOR_CLOSE     = Color3.fromRGB(220, 80, 100)
+local COLOR_CLOSE_H   = Color3.fromRGB(255, 110, 130)
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CheckpointSystem"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.DisplayOrder = 999
+ScreenGui.Parent = container
+
+--============================================================
+-- CUSTOM TOAST NOTIFICATION
+--============================================================
+local NotifContainer = Instance.new("Frame")
+NotifContainer.Size = UDim2.new(0, 250, 0, 200)
+NotifContainer.Position = UDim2.new(1, -270, 0, 20)
+NotifContainer.BackgroundTransparency = 1
+NotifContainer.Parent = ScreenGui
+
+local NotifLayout = Instance.new("UIListLayout")
+NotifLayout.Padding = UDim.new(0, 8)
+NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+NotifLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+NotifLayout.Parent = NotifContainer
+
+local function showToast(text)
+    local toast = Instance.new("Frame")
+    toast.Size = UDim2.new(1, 0, 0, 40)
+    toast.BackgroundColor3 = COLOR_PANEL
+    toast.BackgroundTransparency = 0.1
+    toast.BorderSizePixel = 0
+    toast.Parent = NotifContainer
+
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 6)
+    c.Parent = toast
+
+    local s = Instance.new("UIStroke")
+    s.Color = COLOR_ACCENT
+    s.Thickness = 1.5
+    s.Transparency = 0.3
+    s.Parent = toast
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, -20, 1, 0)
+    l.Position = UDim2.new(0, 12, 0, 0)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = COLOR_TEXT
+    l.Font = Enum.Font.GothamMedium
+    l.TextSize = 12
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = toast
+
+    toast.Position = UDim2.new(1, 50, 0, 0)
+    TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0, 0, 0, 0)
+    }):Play()
+
+    task.delay(2, function()
+        if toast and toast.Parent then
+            local tw = TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                Position = UDim2.new(1, 50, 0, 0),
+                BackgroundTransparency = 1
+            })
+            tw:Play()
+            tw.Completed:Connect(function()
+                toast:Destroy()
+            end)
+        end
+    end)
+end
+
+--============================================================
+-- FLOATING C ICON
+--============================================================
+local Icon = Instance.new("Frame")
+Icon.Size = UDim2.new(0, 54, 0, 54)
+Icon.Position = UDim2.new(0, 20, 0, 90)
+Icon.BackgroundColor3 = COLOR_PANEL
+Icon.BorderSizePixel = 0
+Icon.Active = true
+Icon.Parent = ScreenGui
+
+local ic = Instance.new("UICorner")
+ic.CornerRadius = UDim.new(0, 14)
+ic.Parent = Icon
+
+local ig = Instance.new("UIGradient")
+ig.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, COLOR_ACCENT_D),
+    ColorSequenceKeypoint.new(1, COLOR_BG)
+}
+ig.Rotation = 135
+ig.Parent = Icon
+
+local istroke = Instance.new("UIStroke")
+istroke.Color = COLOR_ACCENT
+istroke.Thickness = 2
+istroke.Transparency = 0.2
+istroke.Parent = Icon
+
+local glowTween = TweenService:Create(
+    istroke,
+    TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+    { Transparency = 0.65, Thickness = 3 }
+)
+glowTween:Play()
+
+local ilabel = Instance.new("TextLabel")
+ilabel.Size = UDim2.new(1, 0, 1, 0)
+ilabel.BackgroundTransparency = 1
+ilabel.Text = "C"
+ilabel.TextColor3 = COLOR_TEXT
+ilabel.Font = Enum.Font.GothamBlack
+ilabel.TextSize = 30
+ilabel.Parent = Icon
+
+--============================================================
+-- MAIN MENU (PINDAH KE KANAN)
+--============================================================
+local Menu = Instance.new("Frame")
+Menu.Size = UDim2.new(0, 300, 0, 420)
+-- Anchor ke Kanan (1, -320) artinya 20px dari tepi kanan layar
+Menu.Position = UDim2.new(1, -320, 0.5, -210) 
+Menu.BackgroundColor3 = COLOR_BG
+Menu.BorderSizePixel = 0
+Menu.Visible = false
+Menu.ClipsDescendants = true
+Menu.Parent = ScreenGui
+
+local mc = Instance.new("UICorner")
+mc.CornerRadius = UDim.new(0, 12)
+mc.Parent = Menu
+
+local mg = Instance.new("UIGradient")
+mg.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(16, 22, 36)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 12, 20))
+}
+mg.Rotation = 90
+mg.Parent = Menu
+
+local mstroke = Instance.new("UIStroke")
+mstroke.Color = COLOR_ACCENT
+mstroke.Thickness = 1.5
+mstroke.Transparency = 0.4
+mstroke.Parent = Menu
+
+-- TITLE BAR
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 44)
+TitleBar.BackgroundColor3 = COLOR_TITLEBAR
+TitleBar.BorderSizePixel = 0
+TitleBar.Active = true
+TitleBar.Parent = Menu
+
+local tbc = Instance.new("UICorner")
+tbc.CornerRadius = UDim.new(0, 12)
+tbc.Parent = TitleBar
+
+local tbf = Instance.new("Frame")
+tbf.Size = UDim2.new(1, 0, 0, 12)
+tbf.Position = UDim2.new(0, 0, 1, -12)
+tbf.BackgroundColor3 = COLOR_TITLEBAR
+tbf.BorderSizePixel = 0
+tbf.Parent = TitleBar
+
+local tbacc = Instance.new("Frame")
+tbacc.Size = UDim2.new(1, 0, 0, 1)
+tbacc.Position = UDim2.new(0, 0, 1, -1)
+tbacc.BackgroundColor3 = COLOR_ACCENT
+tbacc.BackgroundTransparency = 0.5
+tbacc.BorderSizePixel = 0
+tbacc.Parent = TitleBar
+
+local tlabel = Instance.new("TextLabel")
+tlabel.Size = UDim2.new(1, -60, 1, 0)
+tlabel.Position = UDim2.new(0, 15, 0, 0)
+tlabel.BackgroundTransparency = 1
+tlabel.Text = "CHECKPOINT (3 SLOT)"
+tlabel.TextColor3 = COLOR_TEXT
+tlabel.TextXAlignment = Enum.TextXAlignment.Left
+tlabel.Font = Enum.Font.GothamBlack
+tlabel.TextSize = 14
+tlabel.Parent = TitleBar
+
+-- CLOSE BUTTON
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -36, 0, 8)
+closeBtn.BackgroundColor3 = COLOR_CLOSE
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.GothamBlack
+closeBtn.TextSize = 12
+closeBtn.BorderSizePixel = 0
+closeBtn.AutoButtonColor = false
+closeBtn.Parent = TitleBar
+
+local cbc = Instance.new("UICorner")
+cbc.CornerRadius = UDim.new(0, 6)
+cbc.Parent = closeBtn
+
+closeBtn.MouseEnter:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_CLOSE_H}):Play() end)
+closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_CLOSE}):Play() end)
+
+-- SCROLL AREA
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.Size = UDim2.new(1, -20, 1, -60)
+Scroll.Position = UDim2.new(0, 10, 0, 50)
+Scroll.BackgroundTransparency = 1
+Scroll.BorderSizePixel = 0
+Scroll.ScrollBarThickness = 4
+Scroll.ScrollBarImageColor3 = COLOR_ACCENT_D
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+Scroll.Parent = Menu
+
+local ScrollPadding = Instance.new("UIPadding")
+ScrollPadding.PaddingTop = UDim.new(0, 8)
+ScrollPadding.PaddingBottom = UDim.new(0, 20)
+ScrollPadding.Parent = Scroll
+
+local slayout = Instance.new("UIListLayout")
+slayout.Padding = UDim.new(0, 12) 
+slayout.SortOrder = Enum.SortOrder.LayoutOrder
+slayout.Parent = Scroll
+
+local function updateCanvas()
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, slayout.AbsoluteContentSize.Y + 20)
+end
+slayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvas)
+
+--============================================================
+-- BUTTON BUILDERS
+--============================================================
+local function createButton(text, layoutOrder, variant)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 45)
+    btn.BackgroundColor3 = COLOR_BTN
+    btn.Text = text
+    btn.TextColor3 = COLOR_TEXT
+    btn.Font = Enum.Font.GothamMedium
+    btn.TextSize = 13
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = false
+    btn.LayoutOrder = layoutOrder
+    btn.Parent = Scroll
+
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = btn
+
+    local s = Instance.new("UIStroke")
+    s.Color = (variant == "tp") and COLOR_ACCENT_D or COLOR_ACCENT
+    s.Thickness = 1
+    s.Transparency = 0.5
+    s.Parent = btn
+
+    btn.MouseEnter:Connect(function()
+        if btn.Active then
+            TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_BTN_HOVER}):Play()
+            TweenService:Create(s, TweenInfo.new(0.15), {Transparency = 0.1, Thickness = 1.5}):Play()
+        end
+    end)
+    btn.MouseLeave:Connect(function()
+        if btn.Active then
+            TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_BTN}):Play()
+            TweenService:Create(s, TweenInfo.new(0.15), {Transparency = 0.5, Thickness = 1}):Play()
+        end
+    end)
+
+    return btn, s
+end
+
+local function createToggleButton(text, layoutOrder, callback)
+    local container = Instance.new("TextButton")
+    container.Size = UDim2.new(1, 0, 0, 45)
+    container.BackgroundColor3 = COLOR_BTN
+    container.Text = ""
+    container.AutoButtonColor = false
+    container.LayoutOrder = layoutOrder
+    container.Parent = Scroll
+    
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = container
+    
+    local s = Instance.new("UIStroke")
+    s.Color = COLOR_ACCENT
+    s.Thickness = 1
+    s.Transparency = 0.5
+    s.Parent = container
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -60, 1, 0)
+    label.Position = UDim2.new(0, 15, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = COLOR_TEXT
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+    
+    local toggleBg = Instance.new("Frame")
+    toggleBg.Size = UDim2.new(0, 44, 0, 24)
+    toggleBg.Position = UDim2.new(1, -54, 0.5, -12)
+    toggleBg.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+    toggleBg.BorderSizePixel = 0
+    toggleBg.Parent = container
+    
+    local tbc = Instance.new("UICorner")
+    tbc.CornerRadius = UDim.new(1, 0)
+    tbc.Parent = toggleBg
+    
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 20, 0, 20)
+    knob.Position = UDim2.new(0, 2, 0.5, -10)
+    knob.BackgroundColor3 = Color3.fromRGB(150, 150, 150) -- Abu-abu (OFF)
+    knob.BorderSizePixel = 0
+    knob.Parent = toggleBg
+    
+    local kc = Instance.new("UICorner")
+    kc.CornerRadius = UDim.new(1, 0)
+    kc.Parent = knob
+    
+    local isToggled = false
+    
+    local function setState(state, animate)
+        isToggled = state
+        local targetPos = state and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+        local targetKnobColor = state and COLOR_ACCENT or Color3.fromRGB(150, 150, 150)
+        local targetBgColor = state and Color3.fromRGB(30, 50, 80) or Color3.fromRGB(60, 60, 75)
+        
+        if animate then
+            TweenService:Create(knob, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Position = targetPos,
+                BackgroundColor3 = targetKnobColor
+            }):Play()
+            TweenService:Create(toggleBg, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                BackgroundColor3 = targetBgColor
+            }):Play()
+        else
+            knob.Position = targetPos
+            knob.BackgroundColor3 = targetKnobColor
+            toggleBg.BackgroundColor3 = targetBgColor
+        end
+    end
+    
+    container.MouseButton1Click:Connect(function()
+        setState(not isToggled, true)
+        callback(isToggled)
+    end)
+    
+    container.MouseEnter:Connect(function()
+        TweenService:Create(container, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_BTN_HOVER}):Play()
+        TweenService:Create(s, TweenInfo.new(0.15), {Transparency = 0.1, Thickness = 1.5}):Play()
+    end)
+    container.MouseLeave:Connect(function()
+        TweenService:Create(container, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_BTN}):Play()
+        TweenService:Create(s, TweenInfo.new(0.15), {Transparency = 0.5, Thickness = 1}):Play()
+    end)
+    
+    return container, s, setState
+end
+
+--============================================================
+-- GHOST CLONE FIX (PERSIS GAMBAR: TANPA MENIMPA WARNA)
+--============================================================
+local function createGhost(slot, targetCFrame)
+    if Checkpoints[slot].ghost then
+        Checkpoints[slot].ghost:Destroy()
+        Checkpoints[slot].ghost = nil
+    end
+
+    local ch = LocalPlayer.Character
+    if not ch then return end
+    
+    local charHRP = ch:FindFirstChild("HumanoidRootPart")
+    if not charHRP then return end
+
+    ch.Archivable = true
+    local ghost = ch:Clone()
+    ghost.Name = "CheckpointGhost_" .. slot
+
+    local offsetCFrame = targetCFrame * charHRP.CFrame:Inverse()
+
+    -- 1. Bersihkan Script, Humanoid, dan efek
+    for _, d in ipairs(ghost:GetDescendants()) do
+        if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("Humanoid")
+           or d:IsA("BillboardGui") or d:IsA("ParticleEmitter") 
+           or d:IsA("Trail") or d:IsA("Sound") or d:IsA("Highlight") then
+            d:Destroy()
+        end
+    end
+
+    -- 2. Transparansi & Posisi (JANGAN UBAH part.Color)
+    for _, part in ipairs(ghost:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CFrame = offsetCFrame * part.CFrame
+            part.Anchored = true
+            part.CanCollide = false
+            part.CanQuery = false
+            part.CanTouch = false
+            part.Massless = true
+            
+            -- Dibuat transparan 60% (0.6), warna & baju tetap asli
+            part.Transparency = 0.6 
+            part.Material = Enum.Material.SmoothPlastic
+            part.CastShadow = false
+        end
+    end
+
+    local ghostHRP = ghost:FindFirstChild("HumanoidRootPart")
+    if ghostHRP then
+        ghost.PrimaryPart = ghostHRP
+
+        -- 3. Efek Highlight Neon Biru (Ini yang bikin efek aura transparan)
+        local hl = Instance.new("Highlight")
+        hl.FillColor = Color3.fromRGB(50, 150, 255) -- Isi biru
+        hl.FillTransparency = 0.5 -- Transparansi isi
+        hl.OutlineColor = Color3.fromRGB(0, 255, 255) -- Garis luar Cyan Neon
+        hl.OutlineTransparency = 0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = ghost
+
+        -- 4. Partikel Aura
+        local attachment = Instance.new("Attachment")
+        attachment.Position = Vector3.new(0, -1, 0)
+        attachment.Parent = ghostHRP
+
+        local aura = Instance.new("ParticleEmitter")
+        aura.Texture = "rbxassetid://243660364"
+        aura.Color = ColorSequence.new(Color3.fromRGB(0, 150, 255), Color3.fromRGB(0, 50, 200))
+        aura.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 0)})
+        aura.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 1)})
+        aura.Lifetime = NumberRange.new(1, 1.5)
+        aura.Rate = 15
+        aura.Speed = NumberRange.new(1, 2)
+        aura.SpreadAngle = Vector2.new(180, 180)
+        aura.EmissionDirection = Enum.NormalId.Top
+        aura.Parent = attachment
+    end
+
+    ghost.Parent = workspace
+    Checkpoints[slot].ghost = ghost
+end
+
+--============================================================
+-- BUILD SLOTS (TOGGLE LOGIC)
+--============================================================
+local SlotButtons = {}
+local ToggleResets = {}
+
+for i = 1, 3 do
+    local saveToggle, saveStroke, setSaveState = createToggleButton("Save Point " .. i, i * 2 - 1, function(state)
+        if state then
+            local ch = LocalPlayer.Character
+            if not ch then showToast("Character tidak ditemukan") setSaveState(false, true) return end
+            local hrp = ch:FindFirstChild("HumanoidRootPart")
+            if not hrp then showToast("HumanoidRootPart hilang") setSaveState(false, true) return end
+
+            Checkpoints[i].cframe = hrp.CFrame
+            createGhost(i, Checkpoints[i].cframe)
+            showToast("Menyimpan Point " .. i)
+            
+            local tpBtn = SlotButtons[i].tpBtn
+            local tpStroke = SlotButtons[i].tpStroke
+            tpBtn.Active = true
+            TweenService:Create(tpBtn, TweenInfo.new(0.25), {
+                TextColor3 = COLOR_TEXT, BackgroundTransparency = 0
+            }):Play()
+            TweenService:Create(tpStroke, TweenInfo.new(0.25), {
+                Color = COLOR_ACCENT, Transparency = 0.3
+            }):Play()
+        else
+            Checkpoints[i].cframe = nil
+            if Checkpoints[i].ghost then
+                Checkpoints[i].ghost:Destroy()
+                Checkpoints[i].ghost = nil
+            end
+            showToast("Point " .. i .. " dimatikan")
+            
+            local tpBtn = SlotButtons[i].tpBtn
+            local tpStroke = SlotButtons[i].tpStroke
+            tpBtn.Active = false
+            TweenService:Create(tpBtn, TweenInfo.new(0.25), {
+                TextColor3 = COLOR_TEXT_DIM, BackgroundTransparency = 0.5
+            }):Play()
+            TweenService:Create(tpStroke, TweenInfo.new(0.25), {
+                Color = COLOR_ACCENT_D, Transparency = 0.5
+            }):Play()
+        end
+    end)
+    
+    ToggleResets[i] = setSaveState
+
+    local tpBtn, tpStroke = createButton("Teleport Point " .. i, i * 2, "tp")
+    tpBtn.BackgroundTransparency = 0.5
+    tpBtn.TextColor3 = COLOR_TEXT_DIM
+    tpBtn.Active = false
+
+    SlotButtons[i] = {
+        saveToggle = saveToggle,
+        saveStroke = saveStroke,
+        tpBtn = tpBtn,
+        tpStroke = tpStroke,
+    }
+
+    tpBtn.MouseButton1Click:Connect(function()
+        if not Checkpoints[i].cframe then return end
+        local ch = LocalPlayer.Character
+        if not ch then return end
+        local hrp = ch:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        hrp.CFrame = Checkpoints[i].cframe
+        showToast("Teleported ke Point " .. i)
+    end)
+end
+
+-- CLEAR ALL BUTTON
+local clearBtn, clearStroke = createButton("Hapus Semua Point", 100, "save")
+clearBtn.BackgroundColor3 = Color3.fromRGB(100, 40, 40)
+clearStroke.Color = COLOR_CLOSE
+
+clearBtn.MouseButton1Click:Connect(function()
+    for i = 1, 3 do
+        Checkpoints[i].cframe = nil
+        if Checkpoints[i].ghost then
+            Checkpoints[i].ghost:Destroy()
+            Checkpoints[i].ghost = nil
+        end
+        if ToggleResets[i] then
+            ToggleResets[i](false, true)
+        end
+        
+        local tpBtn = SlotButtons[i].tpBtn
+                local tpStroke = SlotButtons[i].tpStroke
+        tpBtn.Active = false
+        TweenService:Create(tpBtn, TweenInfo.new(0.25), {
+            TextColor3 = COLOR_TEXT_DIM, BackgroundTransparency = 0.5
+        }):Play()
+        TweenService:Create(tpStroke, TweenInfo.new(0.25), {
+            Color = COLOR_ACCENT_D, Transparency = 0.5
+        }):Play()
+    end
+    showToast("Semua point dihapus")
+end)
+
+updateCanvas()
+
+--============================================================
+-- ANIMASI BUKA/TUTUP
+--============================================================
+local isAnim = false
+
+local function openMenu()
+    if isAnim then return end
+    isAnim = true
+    Menu.Visible = true
+    Menu.Size = UDim2.new(0, 300, 0, 0)
+    Menu.BackgroundTransparency = 1
+    Scroll.Visible = false
+
+    local t = TweenService:Create(Menu, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 300, 0, 420),
+        BackgroundTransparency = 0
+    })
+    t:Play()
+    t.Completed:Wait()
+    Scroll.Visible = true
+    isAnim = false
+end
+
+local function closeMenu()
+    if isAnim then return end
+    isAnim = true
+    Scroll.Visible = false
+    
+    local t = TweenService:Create(Menu, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Size = UDim2.new(0, 300, 0, 0),
+        BackgroundTransparency = 1
+    })
+    t:Play()
+    t.Completed:Wait()
+    Menu.Visible = false
+    isAnim = false
+end
+
+closeBtn.MouseButton1Click:Connect(closeMenu)
+
+--============================================================
+-- DRAG ICON & MENU
+--============================================================
+local iconDrag = nil
+Icon.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        iconDrag = { input = input, startPos = Icon.Position, startMouse = input.Position, moved = false, startTime = tick() }
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not iconDrag or input ~= iconDrag.input then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Position - iconDrag.startMouse
+        if math.abs(delta.X) > 4 or math.abs(delta.Y) > 4 then iconDrag.moved = true end
+        if iconDrag.moved then
+            Icon.Position = UDim2.new(iconDrag.startPos.X.Scale, iconDrag.startPos.X.Offset + delta.X, iconDrag.startPos.Y.Scale, iconDrag.startPos.Y.Offset + delta.Y)
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if not iconDrag or input ~= iconDrag.input then return end
+    if not iconDrag.moved and (tick() - iconDrag.startTime) < 0.6 then
+        if Menu.Visible then closeMenu() else openMenu() end
+    end
+    iconDrag = nil
+end)
+
+local menuDrag = nil
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if input.Position.X > closeBtn.AbsolutePosition.X and input.Position.X < closeBtn.AbsolutePosition.X + closeBtn.AbsoluteSize.X
+        and input.Position.Y > closeBtn.AbsolutePosition.Y and input.Position.Y < closeBtn.AbsolutePosition.Y + closeBtn.AbsoluteSize.Y then return end
+        menuDrag = { input = input, startPos = Menu.Position, startMouse = input.Position }
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not menuDrag or input ~= menuDrag.input then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Position - menuDrag.startMouse
+        Menu.Position = UDim2.new(menuDrag.startPos.X.Scale, menuDrag.startPos.X.Offset + delta.X, menuDrag.startPos.Y.Scale, menuDrag.startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if menuDrag and input == menuDrag.input then menuDrag = nil end
+end)
+
+--============================================================
+-- CLEANUP & EXPORT
+--============================================================
+getgenv().CheckpointSystem = {
+    Destroy = function()
+        for i = 1, 3 do
+            if Checkpoints[i].ghost then pcall(function() Checkpoints[i].ghost:Destroy() end) end
+        end
+        if glowTween then pcall(function() glowTween:Cancel() end) end
+        ScreenGui:Destroy()
+    end
+}
+
+showToast("Checkpoint v5.1 Loaded")
